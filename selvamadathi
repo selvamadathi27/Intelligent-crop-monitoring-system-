@@ -1,0 +1,72 @@
+#include <ESP8266WiFi.h>
+#include <DHT.h>
+#include <ESP8266HTTPClient.h>
+
+// Replace with your network credentials
+const char* ssid = "your_SSID";
+const char* password = "your_PASSWORD";
+
+// ThingSpeak settings
+const char* server = "api.thingspeak.com";
+String apiKey = "your_API_KEY";  // Replace with your ThingSpeak API Key
+
+#define DHTPIN D4
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+#define SOIL_MOISTURE_PIN A0
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi connected");
+}
+
+void loop() {
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature();
+  int soilMoistureValue = analogRead(SOIL_MOISTURE_PIN);
+
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  // Print data to Serial Monitor
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" *C ");
+  Serial.print("Humidity: ");
+  Serial.print(humidity);
+  Serial.print(" %\t");
+  Serial.print("Soil Moisture: ");
+  Serial.println(soilMoistureValue);
+
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    String url = "http://" + String(server) + "/update?api_key=" + apiKey +
+                 "&field1=" + String(temperature) +
+                 "&field2=" + String(humidity) +
+                 "&field3=" + String(soilMoistureValue);
+                 
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      Serial.printf("GET... code: %d\n", httpCode);
+    } else {
+      Serial.printf("GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    http.end();
+  }
+
+  delay(20000); // ThingSpeak rate limit
+}
